@@ -4,7 +4,11 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+// Include the parser
+#include "include/picohttpparser.h"
 #pragma comment(lib, "Ws2_32.lib")
+
+// g++ httpser.cpp include/picohttpparser.c -Iinclude -lws2_32 -o httpser.exe
 
 int main()
 {
@@ -64,42 +68,81 @@ int main()
         if (clientsocket == INVALID_SOCKET)
             continue;
 
-        char buffer[4096];
+        char buffer[8192];
         int bytesrecived = recv(
             clientsocket,
             buffer, sizeof(buffer) - 1,
             0);
-            
-        if (bytesrecived > 0) {
+
+        if (bytesrecived > 0)
+        {
             buffer[bytesrecived] = '\0';
-            std::cout<<"Recived\n";
-            std::cout<<buffer;
-            
-            // Extract the path from the HTTP request (e.g., "GET /about HTTP/1.1")
-            std::istringstream request_stream(buffer);
-            std::string method, path, protocol;
-            request_stream >> method >> path >> protocol;
+            std::cout << "Recived\n";
+            std::cout << buffer;
+            // Now lets start with storing the individual lines
+            // this stores the http headers
+            const char *method;
+            size_t method_len;
+            // strore the endpoint
+            const char *endpoint;
+            size_t endpoint_len;
+            // http version  the rules
+            int minor_version;
+            // http headers
+            // 100 is for the buffer
+            phr_header headers[100];
+            size_t num_headers = 100;
+            // Now the magic
+            int parsethedata = phr_parse_request(
+                buffer, // raw request
+                bytesrecived,
+                // now pass all the pointers
+                &method, &method_len,
+                &endpoint, &endpoint_len,
+                &minor_version,
+                headers, &num_headers,
+                0
+                // if it is first call always pass 0
 
-            // ==========================
-            std::string body = "<h1>Hello,World</h1>";
+            );
+            std::string response;
+            if (parsethedata > 0)
+            {
+                // BOMMMMMM
+                std::cout << "\nBOMMMMM\n";
+                std::string body = "Hello, World!";
+                response =
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Content-Length: " +
+                    std::to_string(body.size()) + "\r\n"
+                                                  "Connection: close\r\n"
+                                                  "\r\n" +
+                    body;
+            }
+            else if (parsethedata == -1)
+            {
+                std::cout << "Invalild http request\n";
+                std::string body = "Bad Request";
 
-            std::string status =
-                (path == "/" || path == "/about")
-                    ? "200 OK"
-                    : "404 Not Found";
-
-            // Using the dynamic response you commented out!
-            std::string response =
-                "HTTP/1.1 " + status + "\r\n"
-                "Content-Type: text/html\r\n"
-                "Content-Length: " + std::to_string(body.size()) + "\r\n"
-                "Connection: close\r\n"
-                "\r\n" +
-                body;
+                response =
+                    "HTTP/1.1 400 Bad Request\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Content-Length: " +
+                    std::to_string(body.size()) + "\r\n"
+                                                  "Connection: close\r\n"
+                                                  "\r\n" +
+                    body;
+            }
+            else if (parsethedata == -2)
+            {
+                std::cout << "Incomplete HTTP request\n";
+                return 0;
+            }
 
             send(clientsocket, response.c_str(), (int)response.length(), 0);
         }
-        
+
         closesocket(clientsocket);
     }
 }
