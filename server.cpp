@@ -8,14 +8,20 @@
 #include "include/picohttpparser.h"
 #pragma comment(lib, "Ws2_32.lib")
 
-// g++ server.cpp include/picohttpparser.c -Iinclude -lws2_32 -o server.exe
+//Include the health checkers
+#include "include/healthchecker.hpp"
+
+// g++ server.cpp healthchecker.cpp include/picohttpparser.c -Iinclude -lws2_32 -pthread -o server.exe
 SOCKET startserver();
 void ACCEPTLOOP(SOCKET serversocket);
 void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket);
 void senddatatoclient(int parsedata, SOCKET clientsocket);
+
+
 int main()
 {
     const SOCKET serversocket = startserver();
+    starthealththread();
     ACCEPTLOOP(serversocket);
     // WSACleanup();
 }
@@ -72,7 +78,6 @@ SOCKET startserver()
 
 void ACCEPTLOOP(SOCKET serversocket)
 {
-
     while (true)
     {
         sockaddr_in clientaddr{};
@@ -120,6 +125,7 @@ void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket)
         &minor_version,
         headers, &num_headers,
         0);
+        
         senddatatoclient(parsedata,clientsocket);
 
 }
@@ -162,3 +168,4 @@ void senddatatoclient(int parsedata, SOCKET clientsocket)
     send(clientsocket, response.c_str(), (int)response.length(), 0);
     shutdown(clientsocket,SD_SEND);
 }
+
