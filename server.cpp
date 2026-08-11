@@ -3,20 +3,21 @@
 #include <sstream>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-
+#include <cstring>
 // Include the parser
 #include "include/picohttpparser.h"
 #pragma comment(lib, "Ws2_32.lib")
 
-//Include the health checkers
+// Include the health checkers
 #include "include/healthchecker.hpp"
 
 // g++ server.cpp healthchecker.cpp include/picohttpparser.c -Iinclude -lws2_32 -pthread -o server.exe
+#define NEWHOST "/Host"
+
 SOCKET startserver();
 void ACCEPTLOOP(SOCKET serversocket);
 void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket);
-void senddatatoclient(int parsedata, SOCKET clientsocket);
-
+void senddatatoclient(int parsedata, SOCKET clientsocket, bool client);
 
 int main()
 {
@@ -125,17 +126,27 @@ void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket)
         &minor_version,
         headers, &num_headers,
         0);
-        
-        senddatatoclient(parsedata,clientsocket);
-
+    std::string recivedendpoint(endpoint, endpoint_len);
+    // bool client = addnewclient(recivedendpoint);
+    bool client = (recivedendpoint == NEWHOST);
+    senddatatoclient(parsedata, clientsocket, client);
 }
-void senddatatoclient(int parsedata, SOCKET clientsocket)
+void senddatatoclient(int parsedata, SOCKET clientsocket, bool client)
 {
     std::string response;
-    if (parsedata > 0)
+    if (parsedata == -2)
+    {
+        std::cout << "Incomplete HTTP request\n";
+    }
+    else if (client)
+    {
+
+        response = "HTTP/1.1 200 OK\r\n\r\n";
+    }
+    else if (parsedata > 0)
     {
         // BOMMMMMM
-        std::cout << "\nBOMMMMM\n";
+
         std::string body = "Hello, World!";
         response =
             "HTTP/1.1 200 OK\r\n"
@@ -160,12 +171,8 @@ void senddatatoclient(int parsedata, SOCKET clientsocket)
                                           "\r\n" +
             body;
     }
-    else if (parsedata == -2)
-    {
-        std::cout << "Incomplete HTTP request\n";
-    }
 
     send(clientsocket, response.c_str(), (int)response.length(), 0);
-    shutdown(clientsocket,SD_SEND);
+    shutdown(clientsocket, SD_SEND);
 }
 
