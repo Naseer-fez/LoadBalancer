@@ -4,6 +4,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <cstring>
+#include <vector>
 // Include the parser
 #include "include/picohttpparser.h"
 #pragma comment(lib, "Ws2_32.lib")
@@ -17,7 +18,10 @@
 SOCKET startserver();
 void ACCEPTLOOP(SOCKET serversocket);
 void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket);
-void senddatatoclient(int parsedata, SOCKET clientsocket, bool client);
+void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const char *request, int reqlen);
+std::string giveaserver(std::vector<std::string> avaliableservers);
+void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen);
+void forwarddata(SOCKET clientsocket, SOCKET backednsocket);
 
 int main()
 {
@@ -129,11 +133,12 @@ void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket)
     std::string recivedendpoint(endpoint, endpoint_len);
     // bool client = addnewclient(recivedendpoint);
     bool client = (recivedendpoint == NEWHOST);
-    senddatatoclient(parsedata, clientsocket, client);
+    senddatatoserver(parsedata, clientsocket, client, reqdata, bytesrecived);
 }
-void senddatatoclient(int parsedata, SOCKET clientsocket, bool client)
+void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const char *request, int reqlen)
 {
     std::string response;
+
     if (parsedata == -2)
     {
         std::cout << "Incomplete HTTP request\n";
@@ -142,20 +147,6 @@ void senddatatoclient(int parsedata, SOCKET clientsocket, bool client)
     {
 
         response = "HTTP/1.1 200 OK\r\n\r\n";
-    }
-    else if (parsedata > 0)
-    {
-        // BOMMMMMM
-
-        std::string body = "Hello, World!";
-        response =
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: " +
-            std::to_string(body.size()) + "\r\n"
-                                          "Connection: close\r\n"
-                                          "\r\n" +
-            body;
     }
     else if (parsedata == -1)
     {
@@ -171,8 +162,85 @@ void senddatatoclient(int parsedata, SOCKET clientsocket, bool client)
                                           "\r\n" +
             body;
     }
-
-    send(clientsocket, response.c_str(), (int)response.length(), 0);
-    shutdown(clientsocket, SD_SEND);
+    if (parsedata < 0)
+    {
+        send(clientsocket, response.c_str(), (int)response.length(), 0);
+        shutdown(clientsocket, SD_SEND);
+        return;
+    }
+    tranafertoserver(clientsocket,request , reqlen);
+    return;
 }
 
+void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen)
+{
+
+    std::string server = giveaserver(getallserver());
+    SOCKET backendsocket = socket(
+        AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (backendsocket == INVALID_SOCKET)
+    {
+        std::cerr << "socket() failed\n";
+        return;
+    }
+    // Extract the ip
+    size_t colon = server.find(':');
+    std::string ip = server.substr(0, colon);       // get the ip
+    int port = std::stoi(server.substr(colon + 1)); // string to int
+
+    sockaddr_in backendadd{};
+    backendadd.sin_family = AF_INET;
+    backendadd.sin_port = htons(port);
+
+    inet_pton(
+        AF_INET,
+        ip.c_str(),
+        &backendadd.sin_addr);
+
+    if (connect(backendsocket, reinterpret_cast<sockaddr *>(&backendadd), sizeof(backendadd)) == SOCKET_ERROR)
+    {
+        std::cerr << "connect() failed\n";
+        closesocket(backendsocket);
+        return;
+    }
+    send(
+        backendsocket,
+        request,
+        (reqlen), 0);
+
+    forwarddata(clientsocket, backendsocket);
+    closesocket(backendsocket);
+}
+void forwarddata(SOCKET clientsocket, SOCKET backednsocket)
+{
+    char buffer[8192];
+    while (1)
+    {
+        int bytesrecived = recv(
+            clientsocket,
+            buffer, sizeof(buffer) - 1,
+            0);
+        if (bytesrecived <= 0)
+            break; // Nothing to get
+        int sent = 0;
+        while (sent < bytesrecived)
+        {
+            int n=send(
+                backednsocket,
+                buffer + sent,
+                (bytesrecived - sent), 0);
+            if (n == SOCKET_ERROR)
+                return;
+
+            sent += n;
+        }
+    }
+}
+
+int movement = 0;
+std::string giveaserver(std::vector<std::string> avaliableservers)
+{
+    
+    movement++;
+    return avaliableservers[movement % avaliableservers.size()];
+}

@@ -5,4 +5,5 @@
 void readserverfile();
 void Healthcheckerofservers();
 void starthealththread();
+std::vector<std::string> getallserver();
 #endif

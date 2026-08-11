@@ -19,8 +19,7 @@ std::vector<std::string> SERVERS;
 void readserverfile();
 void Healthcheckerofservers();
 void starthealththread();
-std::string giveaserver();
-
+std::vector<std::string> getallserver();
 
 
 void readserverfile()
@@ -115,8 +114,11 @@ void starthealththread()
     std::cout << "Starting the Health thread...\n";
     std::thread(Healthcheckerofservers).detach();
 }
-std::string giveaserver()
-{
-    
-    return SERVERS[0];
+
+std::vector<std::string> getallserver(){
+    std::lock_guard<std::mutex> lock(server_mutex)
+    {
+        return SERVERS;
+    }
+
 }
