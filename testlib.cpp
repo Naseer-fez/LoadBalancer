@@ -1,25 +1,39 @@
-#include <bits/stdc++.h>
-#include "include/json.hpp"
-
-
-
 #include <iostream>
 #include <fstream>
-#include <set>
+#include <vector>
+#include <algorithm>
 #include <string>
 #include <mutex>
 #include <thread>
 #include <chrono>
 #include <thread>
 #include "include/httplib.h"
+// #include "healthchecker.hpp"
 
 #define FILENAME "avaliableserver.txt"
 #define CHECK "/"
 #define SLEEPTIME 12
 std::mutex server_mutex;
-std::set<std::string> SERVERS;
-//$ g++ -static testlb.cpp -o testlb -O2 -lws2_32 -pthread
-void readfile()
+std::vector<std::string> SERVERS;
+
+void readserverfile();
+void Healthcheckerofservers();
+void starthealththread();
+std::string giveaserver(std::vector<std::string> avaliableservers);
+
+int main()
+{
+    std::cout << "HIIIII\n";
+    starthealththread();
+    while (true)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::cout<<"THe server we recived is"<<giveaserver(SERVERS)<<;
+    }
+    return 0;
+}
+
+void readserverfile()
 {
 
     std::ifstream file(FILENAME);
@@ -30,11 +44,11 @@ void readfile()
         return;
     }
     std::string line;
-    std::set<std::string> newservers;
+    std::vector<std::string> newservers;
     while (std::getline(file, line))
     {
         // std::cout<<line<<"\n";
-        newservers.insert(line);
+        newservers.push_back(line);
     }
     {
         std::lock_guard<std::mutex> lock(server_mutex);
@@ -45,19 +59,18 @@ void readfile()
         }
     }
 }
-
-void Healthchecker()
+void Healthcheckerofservers()
 {
     while (true)
     {
-        std::set<std::string> snapshot;
+        std::vector<std::string> snapshot;
 
         {
             std::lock_guard<std::mutex> lock(server_mutex);
             snapshot = SERVERS;
         }
 
-        std::set<std::string> deadServers;
+        std::vector<std::string> deadServers;
 
         for (const auto &node : snapshot)
         {
@@ -70,7 +83,7 @@ void Healthchecker()
             if (!response || response->status != 200)
             {
                 std::cout << "[Health] DOWN : " << node << '\n';
-                deadServers.insert(node);
+                deadServers.push_back(node);
             }
         }
 
@@ -78,12 +91,19 @@ void Healthchecker()
         {
             std::lock_guard<std::mutex> lock(server_mutex);
 
-            for (const auto &node : deadServers)
             {
-                SERVERS.erase(node);
+                for (const auto &server : deadServers)
+                {
+                    auto it = std::find(SERVERS.begin(), SERVERS.end(), server);
+                    if (it != SERVERS.end())
+                    {
+                        SERVERS.erase(it);
+                    }
+                }
+                std::sort(SERVERS.begin(), SERVERS.end());
             }
         }
-        { //optional for testing only 
+        { // optional for testing only
             std::lock_guard<std::mutex> lock(server_mutex);
 
             std::cout << "\nAlive Servers\n";
@@ -99,24 +119,17 @@ void Healthchecker()
         std::this_thread::sleep_for(std::chrono::seconds(SLEEPTIME));
     }
 }
+void starthealththread()
+{
+    readserverfile();
+    std::cout << "Starting the Health thread...\n";
+    std::thread(Healthcheckerofservers).detach();
+}
+int movement=0;
 
-
-
-
-
-int main()
+std::string giveaserver(std::vector<std::string> avaliableservers)
 {
     
-    readfile();
-    std::cout << "Starting the thread::";
-    std::thread health_check_thread(Healthchecker);
-    // std::thread filereader_thread(readfile);
-    // filereader_thread.join();
-    while (true)
-    {
-        readfile();
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-    }
-    health_check_thread.join();
-    return 0;
+    movement++;
+    return avaliableservers[movement%2];
 }
