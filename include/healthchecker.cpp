@@ -1,23 +1,28 @@
 #include <iostream>
 #include <fstream>
-#include <set>
+#include <vector>
+#include <algorithm>
 #include <string>
 #include <mutex>
 #include <thread>
 #include <chrono>
 #include <thread>
-#include "httplib.h"
-#include "healthchecker.hpp"
+#include "include/httplib.h"
+// #include "healthchecker.hpp"
 
 #define FILENAME "avaliableserver.txt"
 #define CHECK "/"
 #define SLEEPTIME 12
 std::mutex server_mutex;
-std::set<std::string> SERVERS;
+std::vector<std::string> SERVERS;
 
 void readserverfile();
 void Healthcheckerofservers();
 void starthealththread();
+std::string giveaserver();
+
+
+
 void readserverfile()
 {
 
@@ -29,11 +34,11 @@ void readserverfile()
         return;
     }
     std::string line;
-    std::set<std::string> newservers;
+    std::vector<std::string> newservers;
     while (std::getline(file, line))
     {
         // std::cout<<line<<"\n";
-        newservers.insert(line);
+        newservers.push_back(line);
     }
     {
         std::lock_guard<std::mutex> lock(server_mutex);
@@ -44,19 +49,18 @@ void readserverfile()
         }
     }
 }
-
 void Healthcheckerofservers()
 {
     while (true)
     {
-        std::set<std::string> snapshot;
+        std::vector<std::string> snapshot;
 
         {
             std::lock_guard<std::mutex> lock(server_mutex);
             snapshot = SERVERS;
         }
 
-        std::set<std::string> deadServers;
+        std::vector<std::string> deadServers;
 
         for (const auto &node : snapshot)
         {
@@ -69,7 +73,7 @@ void Healthcheckerofservers()
             if (!response || response->status != 200)
             {
                 std::cout << "[Health] DOWN : " << node << '\n';
-                deadServers.insert(node);
+                deadServers.push_back(node);
             }
         }
 
@@ -77,9 +81,16 @@ void Healthcheckerofservers()
         {
             std::lock_guard<std::mutex> lock(server_mutex);
 
-            for (const auto &node : deadServers)
             {
-                SERVERS.erase(node);
+                for (const auto &server : deadServers)
+                {
+                    auto it = std::find(SERVERS.begin(), SERVERS.end(), server);
+                    if (it != SERVERS.end())
+                    {
+                        SERVERS.erase(it);
+                    }
+                }
+                std::sort(SERVERS.begin(), SERVERS.end());
             }
         }
         { // optional for testing only
@@ -102,6 +113,10 @@ void starthealththread()
 {
     readserverfile();
     std::cout << "Starting the Health thread...\n";
-    std::thread (Healthcheckerofservers).detach();
-
+    std::thread(Healthcheckerofservers).detach();
+}
+std::string giveaserver()
+{
+    
+    return SERVERS[0];
 }
