@@ -12,7 +12,7 @@
 // Include the health checkers
 #include "include/healthchecker.hpp"
 
-// g++ server.cpp healthchecker.cpp include/picohttpparser.c -Iinclude -lws2_32 -pthread -o server.exe
+// g++ server.cpp include/healthchecker.cpp include/picohttpparser.c -Iinclude -lws2_32 -pthread -o server.exe
 #define NEWHOST "/Host"
 
 SOCKET startserver();

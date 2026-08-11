@@ -7,8 +7,8 @@
 #include <thread>
 #include <chrono>
 #include <thread>
-#include "include/httplib.h"
-// #include "healthchecker.hpp"
+#include "httplib.h"
+#include "healthchecker.hpp"
 
 #define FILENAME "avaliableserver.txt"
 #define CHECK "/"
@@ -116,7 +116,7 @@ void starthealththread()
 }
 
 std::vector<std::string> getallserver(){
-    std::lock_guard<std::mutex> lock(server_mutex)
+    std::lock_guard<std::mutex> lock(server_mutex);
     {
         return SERVERS;
     }
