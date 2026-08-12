@@ -12,7 +12,9 @@
 // Include the health checkers
 #include "include/healthchecker.hpp"
 
-// g++ server.cpp include/healthchecker.cpp include/picohttpparser.c -Iinclude -lws2_32 -pthread -o server.exe
+//Includieng the the load balcner
+#include "include/loadbalancer.hpp"
+// g++ server.cpp include/healthchecker.cpp include/loadbalancer.cpp include/picohttpparser.c -Iinclude -lws2_32 -pthread -o server.exe
 #define NEWHOST "/Host"
 
 SOCKET startserver();
@@ -307,10 +309,3 @@ bool communicatedata(SOCKET source, SOCKET destination)
     return 1;
 }
 
-int movement = 0;
-std::string giveaserver(std::vector<std::string> avaliableservers)
-{
-
-    movement++;
-    return avaliableservers[movement % avaliableservers.size()];
-}
