@@ -22,7 +22,7 @@ void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const cha
 std::string giveaserver(std::vector<std::string> avaliableservers);
 void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen);
 void forwarddata(SOCKET clientsocket, SOCKET backednsocket);
-
+bool communicatedata(SOCKET source, SOCKET destination);
 int main()
 {
     const SOCKET serversocket = startserver();
@@ -104,6 +104,7 @@ void ACCEPTLOOP(SOCKET serversocket)
         {
             parsedata(buffer, bytesrecived, clientsocket);
         }
+        // closesocket(clientsocket);
     }
 }
 void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket)
@@ -130,6 +131,18 @@ void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket)
         &minor_version,
         headers, &num_headers,
         0);
+
+    if (parsedata == -2)
+    {
+        std::cout << "Incomplete HTTP request\n";
+        return;
+    }
+    else if (parsedata == -1)
+    {
+        std::cout << "Invalid HTTP request\n";
+        return;
+    }
+
     std::string recivedendpoint(endpoint, endpoint_len);
     // bool client = addnewclient(recivedendpoint);
     bool client = (recivedendpoint == NEWHOST);
@@ -145,8 +158,9 @@ void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const cha
     }
     else if (client)
     {
-
         response = "HTTP/1.1 200 OK\r\n\r\n";
+        send(clientsocket, response.c_str(), (int)response.size(), 0);
+        return;
     }
     else if (parsedata == -1)
     {
@@ -168,7 +182,7 @@ void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const cha
         shutdown(clientsocket, SD_SEND);
         return;
     }
-    tranafertoserver(clientsocket,request , reqlen);
+    tranafertoserver(clientsocket, request, reqlen);
     return;
 }
 
@@ -176,6 +190,18 @@ void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen)
 {
 
     std::string server = giveaserver(getallserver());
+    if (server.empty())
+    {
+        std::cout << "No servers available\n";
+        std::string body = "503 Service Unavailable";
+        std::string response =
+            "HTTP/1.1 503 Service Unavailable\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: " +
+            std::to_string(body.size()) + "\r\n\r\n" + body;
+        send(clientsocket, response.c_str(), (int)response.length(), 0);
+        return;
+    }
     SOCKET backendsocket = socket(
         AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (backendsocket == INVALID_SOCKET)
@@ -200,6 +226,10 @@ void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen)
     if (connect(backendsocket, reinterpret_cast<sockaddr *>(&backendadd), sizeof(backendadd)) == SOCKET_ERROR)
     {
         std::cerr << "connect() failed\n";
+        std::string body = "502 Bad Gateway - Backend server unreachable";
+        std::string response = "HTTP/1.1 503 Bad Gateway\r\n\r\n";
+        send(clientsocket, response.c_str(), (int)response.size(), 0);
+        closesocket(clientsocket);
         closesocket(backendsocket);
         return;
     }
@@ -210,37 +240,77 @@ void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen)
 
     forwarddata(clientsocket, backendsocket);
     closesocket(backendsocket);
+    closesocket(clientsocket);
 }
 void forwarddata(SOCKET clientsocket, SOCKET backednsocket)
 {
-    char buffer[8192];
+
     while (1)
     {
-        int bytesrecived = recv(
-            clientsocket,
-            buffer, sizeof(buffer) - 1,
-            0);
-        if (bytesrecived <= 0)
-            break; // Nothing to get
-        int sent = 0;
-        while (sent < bytesrecived)
-        {
-            int n=send(
-                backednsocket,
-                buffer + sent,
-                (bytesrecived - sent), 0);
-            if (n == SOCKET_ERROR)
-                return;
+        // Lets strt the fdset
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(clientsocket, &readfds);
+        FD_SET(backednsocket, &readfds);
 
-            sent += n;
+        int result = select(0, &readfds, nullptr, nullptr, nullptr);
+
+        if (result == SOCKET_ERROR)
+        {
+            std::cerr << "select() failed\n";
+            break;
         }
+
+        if (FD_ISSET(clientsocket, &readfds))
+        {
+            if (!communicatedata(clientsocket, backednsocket))
+            {
+                break;
+            }
+        }
+
+        if (FD_ISSET(backednsocket, &readfds))
+        {
+
+            if (!communicatedata(backednsocket, clientsocket))
+            {
+                break;
+            }
+        }
+
+        // Now the data from the abckend here??
     }
+}
+
+bool communicatedata(SOCKET source, SOCKET destination)
+{
+    char buffer[8192];
+
+    int bytesrecived = recv(
+        source,
+        buffer, sizeof(buffer) - 1,
+        0);
+    if (bytesrecived <= 0)
+        return 0; // Nothing to get
+    int sent = 0;
+    while (sent < bytesrecived)
+    {
+        int n = send(
+            destination,
+            buffer + sent,
+            (bytesrecived - sent), 0);
+        if (n == SOCKET_ERROR)
+            return 0;
+
+        sent += n;
+    }
+    return 1;
 }
 
 int movement = 0;
 std::string giveaserver(std::vector<std::string> avaliableservers)
 {
-    
+
     movement++;
     return avaliableservers[movement % avaliableservers.size()];
 }
