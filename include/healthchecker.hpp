@@ -2,8 +2,12 @@
 #define HEALTHCHECK_HPP
 
 
+#include <vector>
+#include <string>
+#include <utility>
+
 void readserverfile();
 void Healthcheckerofservers();
 void starthealththread();
-std::vector<std::string> getallserver();
+std::vector<std::pair<std::string, std::vector<float>>>  getallserver();
 #endif

@@ -1,6 +1,11 @@
 #ifndef LOADBALANCER_HPP
 #define LOADBALANCER_HPP
 
-std::string giveaserver(std::vector<std::string> avaliableservers);
+#include <vector>
+#include <string>
+#include <utility>
+
+
+std::string giveaserver(std::vector<std::pair<std::string, std::vector<float>>> avaliableservers);
 
 #endif

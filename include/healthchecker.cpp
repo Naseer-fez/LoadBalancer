@@ -9,17 +9,22 @@
 #include <thread>
 #include "httplib.h"
 #include "healthchecker.hpp"
+#include "json.hpp"
 
 #define FILENAME "avaliableserver.txt"
-#define CHECK "/"
+#define CHECK "/health"
 #define SLEEPTIME 12
+
+using json =nlohmann::json;
 std::mutex server_mutex;
-std::vector<std::string> SERVERS;
+// std::vector<std::string> SERVERS;
+
 
 void readserverfile();
 void Healthcheckerofservers();
 void starthealththread();
-std::vector<std::string> getallserver();
+std::vector<std::pair<std::string, std::vector<float>>> getallserver();
+std::vector<std::pair<std::string, std::vector<float>>> SERVERS;
 
 
 void readserverfile()
@@ -33,11 +38,11 @@ void readserverfile()
         return;
     }
     std::string line;
-    std::vector<std::string> newservers;
+    std::vector<std::pair<std::string, std::vector<float>>> newservers;
     while (std::getline(file, line))
     {
         // std::cout<<line<<"\n";
-        newservers.push_back(line);
+        newservers.push_back({line, {}});
     }
     {
         std::lock_guard<std::mutex> lock(server_mutex);
@@ -52,27 +57,31 @@ void Healthcheckerofservers()
 {
     while (true)
     {
-        std::vector<std::string> snapshot;
+        std::vector<std::pair<std::string, std::vector<float>>> snapshot;
 
         {
             std::lock_guard<std::mutex> lock(server_mutex);
             snapshot = SERVERS;
         }
 
-        std::vector<std::string> deadServers;
+        std::vector<std::pair<std::string, std::vector<float>>> deadServers;
 
         for (const auto &node : snapshot)
         {
-            httplib::Client cli(node);
+            httplib::Client cli(node.first);
 
             cli.set_connection_timeout(3, 0);
 
-            auto response = cli.Get(CHECK);
+            auto response = cli.Get(CHECK); //can create a complex system aslo but lets reduce the complex code in this 
 
             if (!response || response->status != 200)
             {
-                std::cout << "[Health] DOWN : " << node << '\n';
+                std::cout << "[Health] DOWN : " << node.first << '\n';
                 deadServers.push_back(node);
+            }else{
+                json body= json::parse(response->body);
+                std::cout << "Response: " << body << '\n';
+
             }
         }
 
@@ -99,7 +108,7 @@ void Healthcheckerofservers()
 
             for (const auto &server : SERVERS)
             {
-                std::cout << "  " << server << '\n';
+                std::cout << "  " << server.first << '\n';
             }
 
             std::cout << '\n';
@@ -115,10 +124,12 @@ void starthealththread()
     std::thread(Healthcheckerofservers).detach();
 }
 
-std::vector<std::string> getallserver(){
+std::vector<std::pair<std::string, std::vector<float>>> getallserver(){
     std::lock_guard<std::mutex> lock(server_mutex);
     {
         return SERVERS;
     }
 
 }
+
+
