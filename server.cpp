@@ -21,7 +21,6 @@ SOCKET startserver();
 void ACCEPTLOOP(SOCKET serversocket);
 void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket);
 void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const char *request, int reqlen);
-std::string giveaserver(std::vector<std::string> avaliableservers);
 void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen);
 void forwarddata(SOCKET clientsocket, SOCKET backednsocket);
 bool communicatedata(SOCKET source, SOCKET destination);
@@ -106,48 +105,42 @@ void ACCEPTLOOP(SOCKET serversocket)
         {
             parsedata(buffer, bytesrecived, clientsocket);
         }
-        // closesocket(clientsocket);
+        else
+        {
+            closesocket(clientsocket);
+        }
     }
 }
 void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket)
 {
 
-    // reqdata[bytesrecived] = '\0';
     std::cout << "Recived\n";
     std::cout.write(reqdata, bytesrecived);
 
-    const char *method; // Now lets start with storing the individual lines this stores the http headers
+    const char *method; 
     size_t method_len;
-    const char *endpoint; // strore the endpoint
+    const char *endpoint; 
     size_t endpoint_len;
-    int minor_version; // http version  the rules  // http headers// 100 is for the buffer
+    int minor_version; 
     phr_header headers[100];
     size_t num_headers = 100;
-    // Now the magic
+    
     int parsedata = phr_parse_request(
-        reqdata, // raw request
+        reqdata, 
         bytesrecived,
-        // now pass all the pointers
         &method, &method_len,
         &endpoint, &endpoint_len,
         &minor_version,
         headers, &num_headers,
         0);
 
-    if (parsedata == -2)
+    bool client = false;
+    if (parsedata > 0)
     {
-        std::cout << "Incomplete HTTP request\n";
-        return;
-    }
-    else if (parsedata == -1)
-    {
-        std::cout << "Invalid HTTP request\n";
-        return;
+        std::string recivedendpoint(endpoint, endpoint_len);
+        client = (recivedendpoint == NEWHOST);
     }
 
-    std::string recivedendpoint(endpoint, endpoint_len);
-    // bool client = addnewclient(recivedendpoint);
-    bool client = (recivedendpoint == NEWHOST);
     senddatatoserver(parsedata, clientsocket, client, reqdata, bytesrecived);
 }
 void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const char *request, int reqlen)
@@ -157,16 +150,24 @@ void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const cha
     if (parsedata == -2)
     {
         std::cout << "Incomplete HTTP request\n";
+        std::string body = "400 Incomplete HTTP Request";
+        response =
+            "HTTP/1.1 400 Bad Request\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: " +
+            std::to_string(body.size()) + "\r\n"
+            "Connection: close\r\n\r\n" + body;
     }
     else if (client)
     {
         response = "HTTP/1.1 200 OK\r\n\r\n";
         send(clientsocket, response.c_str(), (int)response.size(), 0);
+        closesocket(clientsocket);
         return;
     }
     else if (parsedata == -1)
     {
-        std::cout << "Invalild http request\n";
+        std::cout << "Invalid http request\n";
         std::string body = "Bad Request";
 
         response =
@@ -174,14 +175,14 @@ void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const cha
             "Content-Type: text/plain\r\n"
             "Content-Length: " +
             std::to_string(body.size()) + "\r\n"
-                                          "Connection: close\r\n"
-                                          "\r\n" +
+            "Connection: close\r\n"
+            "\r\n" +
             body;
     }
     if (parsedata < 0)
     {
         send(clientsocket, response.c_str(), (int)response.length(), 0);
-        shutdown(clientsocket, SD_SEND);
+        closesocket(clientsocket);
         return;
     }
     tranafertoserver(clientsocket, request, reqlen);
@@ -202,6 +203,7 @@ void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen)
             "Content-Length: " +
             std::to_string(body.size()) + "\r\n\r\n" + body;
         send(clientsocket, response.c_str(), (int)response.length(), 0);
+        closesocket(clientsocket);
         return;
     }
     SOCKET backendsocket = socket(
@@ -209,6 +211,7 @@ void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen)
     if (backendsocket == INVALID_SOCKET)
     {
         std::cerr << "socket() failed\n";
+        closesocket(clientsocket);
         return;
     }
     // Extract the ip

@@ -9,5 +9,5 @@
 void readserverfile();
 void Healthcheckerofservers();
 void starthealththread();
-std::vector<std::pair<std::string, std::vector<float>>>  getallserver();
+std::vector<std::pair<std::string, float >>  getallserver();
 #endif
