@@ -106,14 +106,7 @@ void Healthcheckerofservers()
                 snapshot.pop_back();
             }
         }
-
-        std::sort(snapshot.begin(), snapshot.end(), comparator);
-        std::lock_guard<std::mutex> lock(server_mutex);
-        {
-            SERVERS = snapshot;
-        }
-
-       
+        
         { // optional for testing only
             std::lock_guard<std::mutex> lock(server_mutex);
 
@@ -126,6 +119,13 @@ void Healthcheckerofservers()
 
             std::cout << '\n';
         }
+        std::sort(snapshot.begin(), snapshot.end(), comparator);
+        {
+            std::lock_guard<std::mutex> lock(server_mutex);
+            SERVERS = snapshot;
+        }
+
+       
 
         std::this_thread::sleep_for(std::chrono::seconds(SLEEPTIME));
     }
@@ -148,5 +148,5 @@ std::vector<std::pair<std::string, float>> getallserver()
 bool comparator(const std::pair<std::string, float> &a,
                 const std::pair<std::string, float> &b)
 {
-    return a.second > b.second;
+    return a.second < b.second;
 }

@@ -12,7 +12,7 @@
 // Include the health checkers
 #include "include/healthchecker.hpp"
 
-//Includieng the the load balcner
+// Includieng the the load balcner
 #include "include/loadbalancer.hpp"
 // g++ server.cpp include/healthchecker.cpp include/loadbalancer.cpp include/picohttpparser.c -Iinclude -lws2_32 -pthread -o server.exe
 #define NEWHOST "/Host"
@@ -117,16 +117,16 @@ void parsedata(const char *reqdata, size_t bytesrecived, SOCKET clientsocket)
     std::cout << "Recived\n";
     std::cout.write(reqdata, bytesrecived);
 
-    const char *method; 
+    const char *method;
     size_t method_len;
-    const char *endpoint; 
+    const char *endpoint;
     size_t endpoint_len;
-    int minor_version; 
+    int minor_version;
     phr_header headers[100];
     size_t num_headers = 100;
-    
+
     int parsedata = phr_parse_request(
-        reqdata, 
+        reqdata,
         bytesrecived,
         &method, &method_len,
         &endpoint, &endpoint_len,
@@ -156,7 +156,8 @@ void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const cha
             "Content-Type: text/plain\r\n"
             "Content-Length: " +
             std::to_string(body.size()) + "\r\n"
-            "Connection: close\r\n\r\n" + body;
+                                          "Connection: close\r\n\r\n" +
+            body;
     }
     else if (client)
     {
@@ -175,8 +176,8 @@ void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const cha
             "Content-Type: text/plain\r\n"
             "Content-Length: " +
             std::to_string(body.size()) + "\r\n"
-            "Connection: close\r\n"
-            "\r\n" +
+                                          "Connection: close\r\n"
+                                          "\r\n" +
             body;
     }
     if (parsedata < 0)
@@ -238,6 +239,13 @@ void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen)
         closesocket(backendsocket);
         return;
     }
+    std::string backend_request(request, reqlen);
+    size_t conn_pos = backend_request.find("Connection: keep-alive");
+    if (conn_pos != std::string::npos)
+    {
+        backend_request.replace(conn_pos, 22, "Connection: close     ");
+    }
+
     send(
         backendsocket,
         request,
@@ -257,9 +265,14 @@ void forwarddata(SOCKET clientsocket, SOCKET backednsocket)
         FD_ZERO(&readfds);
         FD_SET(clientsocket, &readfds);
         FD_SET(backednsocket, &readfds);
+        timeval tv{0, 500000};
 
-        int result = select(0, &readfds, nullptr, nullptr, nullptr);
-
+        int result = select(0, &readfds, nullptr, nullptr, &tv);
+        // to counter infity timeout
+        if (result <= 0)
+        {
+            break;
+        }
         if (result == SOCKET_ERROR)
         {
             std::cerr << "select() failed\n";
@@ -281,6 +294,7 @@ void forwarddata(SOCKET clientsocket, SOCKET backednsocket)
             {
                 break;
             }
+    
         }
 
         // Now the data from the abckend here??
@@ -311,4 +325,3 @@ bool communicatedata(SOCKET source, SOCKET destination)
     }
     return 1;
 }
-
