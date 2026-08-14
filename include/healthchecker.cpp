@@ -25,8 +25,6 @@ void Healthcheckerofservers();
 void starthealththread();
 std::vector<std::pair<std::string, float>> getallserver();
 std::vector<std::pair<std::string, float>> SERVERS;
-bool comparator(const std::pair<std::string, float> &a,
-                const std::pair<std::string, float> &b);
 void readserverfile()
 {
 
@@ -119,7 +117,6 @@ void Healthcheckerofservers()
 
             std::cout << '\n';
         }
-        std::sort(snapshot.begin(), snapshot.end(), comparator);
         {
             std::lock_guard<std::mutex> lock(server_mutex);
             SERVERS = snapshot;
@@ -145,8 +142,4 @@ std::vector<std::pair<std::string, float>> getallserver()
     }
 }
 
-bool comparator(const std::pair<std::string, float> &a,
-                const std::pair<std::string, float> &b)
-{
-    return a.second < b.second;
-}
+

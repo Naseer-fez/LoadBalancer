@@ -193,7 +193,7 @@ void senddatatoserver(int parsedata, SOCKET clientsocket, bool client, const cha
 void tranafertoserver(SOCKET clientsocket, const char *request, int reqlen)
 {
 
-    std::string server = giveaserver(getallserver());
+    std::string server = giveaserver();
     if (server.empty())
     {
         std::cout << "No servers available\n";
